@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Adhikar — Know Your Rights</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  html, body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .font-serif { font-family: 'Crimson Pro', Georgia, serif; }
+  .law-text { font-family: 'Crimson Pro', Georgia, serif; line-height: 1.65; }
+  .fade-in { animation: fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .pulse-dot { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  /* Brand color tokens */
+  :root {
+    --ink: #0f172a;
+    --paper: #faf8f4;
+    --accent: #b45309;
+    --surface: #ffffff;
+  }
+  body { background: var(--paper); color: var(--ink); }
+  .brand-gradient { background: linear-gradient(135deg, #1e293b 0%, #334155 60%, #475569 100%); }
+  .card-shadow { box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 4px 20px rgba(15,23,42,0.06); }
+  .ring-focus:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
+  /* Radar chart styling */
+  .radar-axis { stroke: #cbd5e1; stroke-width: 1; fill: none; }
+  .radar-data { fill: rgba(180, 83, 9, 0.15); stroke: #b45309; stroke-width: 2; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ============================================================
+   SEED DATA — Law sections, scenarios, act guides
+   All content grounded in real Indian statutes.
+   In production this would live in Postgres; here we embed it.
+   ============================================================ */
+
+const LAW_SECTIONS = {
+  'crpc-41': { act: 'CrPC', number: '41', title: 'When police may arrest without warrant', simplified: 'A police officer can arrest without a warrant only in specific situations — typically for cognizable offences (serious crimes) with reasonable grounds. For offences punishable with up to 7 years, the officer must record reasons.', source: 'Section 41, Code of Criminal Procedure, 1973' },
+  'crpc-41a': { act: 'CrPC', number: '41A', title: 'Notice of appearance before police officer', simplified: 'For offences where arrest is not required (generally punishable up to 7 years), police must issue a written notice to appear, rather than making an immediate arrest. Arrest follows only on failure to comply.', source: 'Section 41A, CrPC (post-Arnesh Kumar v. State of Bihar, 2014)' },
+  'crpc-46-4': { act: 'CrPC', number: '46(4)', title: 'Arrest of women — time restriction', simplified: 'A woman should not be arrested after sunset and before sunrise, except in exceptional circumstances with prior written permission of a Judicial Magistrate. The arrest should ordinarily be made by a woman police officer.', source: 'Section 46(4), CrPC' },
+  'crpc-50': { act: 'CrPC', number: '50(1)', title: 'Right to know grounds of arrest', simplified: 'A person arrested without a warrant must be informed, as soon as possible, of the grounds of arrest. For bailable offences, they must also be informed of the right to bail.', source: 'Section 50, CrPC; Article 22(1), Constitution of India' },
+  'crpc-50a': { act: 'CrPC', number: '50A', title: 'Right to inform a relative of arrest', simplified: 'Police must inform a nominated relative or friend of the person\'s arrest and the place of detention. This right attaches from the moment of arrest.', source: 'Section 50A, CrPC; D.K. Basu v. State of West Bengal (1997)' },
+  'crpc-100': { act: 'CrPC', number: '100', title: 'Persons in charge of closed place to allow search', simplified: 'A search must generally be conducted in the presence of at least two independent local witnesses. The person searched has the right to a list of items seized, signed by the witnesses.', source: 'Section 100, CrPC' },
+  'crpc-165': { act: 'CrPC', number: '165', title: 'Search by police officer', simplified: 'Police can search without a warrant only where they have reasonable grounds to believe a thing necessary for investigation may be found, and they must record reasons in writing before the search.', source: 'Section 165, CrPC' },
+  'art-20-3': { act: 'Constitution', number: 'Art. 20(3)', title: 'Right against self-incrimination', simplified: 'No person accused of an offence can be compelled to be a witness against themselves. You cannot be forced to confess or give testimony that incriminates you.', source: 'Article 20(3), Constitution of India' },
+  'art-21': { act: 'Constitution', number: 'Art. 21', title: 'Right to life and personal liberty', simplified: 'No person shall be deprived of life or personal liberty except according to procedure established by law — and that procedure must be fair, just, and reasonable.', source: 'Article 21, Constitution of India; Maneka Gandhi v. Union of India (1978)' },
+  'art-22-1': { act: 'Constitution', number: 'Art. 22(1)', title: 'Rights on arrest', simplified: 'Every person arrested has the right to be informed of the grounds of arrest and the right to consult and be defended by a lawyer of their choice.', source: 'Article 22(1), Constitution of India' },
+  'art-22-2': { act: 'Constitution', number: 'Art. 22(2)', title: 'Production before magistrate', simplified: 'Every person arrested must be produced before a magistrate within 24 hours of arrest, excluding travel time. Detention beyond 24 hours requires the magistrate\'s order.', source: 'Article 22(2), Constitution of India' },
+  'art-19-1-b': { act: 'Constitution', number: 'Art. 19(1)(b)', title: 'Right to assemble peaceably', simplified: 'All citizens have the right to assemble peaceably and without arms. This right is subject to reasonable restrictions in the interest of public order and sovereignty.', source: 'Article 19(1)(b), Constitution of India' },
+  'posh-4': { act: 'POSH Act', number: 'S. 4', title: 'Internal Complaints Committee', simplified: 'Every employer with 10 or more employees must constitute an Internal Complaints Committee (ICC) at each workplace location to receive and inquire into sexual harassment complaints.', source: 'Section 4, Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013' },
+  'posh-9': { act: 'POSH Act', number: 'S. 9', title: 'Complaint timeline', simplified: 'A complaint of sexual harassment should be filed within three months of the incident (or the last of a series of incidents). The ICC can extend this by up to three more months in writing if satisfied that circumstances prevented timely filing.', source: 'Section 9, POSH Act, 2013' },
+  'mat-12': { act: 'Maternity Benefit Act', number: 'S. 12', title: 'Dismissal during pregnancy', simplified: 'A woman absent on maternity leave cannot be dismissed, and any dismissal during pregnancy or leave that deprives her of maternity benefits is unlawful.', source: 'Section 12, Maternity Benefit Act, 1961' },
+  'cpa-2-47': { act: 'Consumer Protection Act', number: 'S. 2(47)', title: 'Unfair trade practice', simplified: 'Misleading the consumer about quality, quantity, or performance, or withholding material information, is an unfair trade practice and actionable under consumer law.', source: 'Section 2(47), Consumer Protection Act, 2019' },
+  'cpa-ec-4': { act: 'CPA E-Commerce Rules', number: 'Rule 4', title: 'Duties of e-commerce entities', simplified: 'E-commerce entities must display seller information, provide a clear return and refund policy, and cannot manipulate prices or impose conditions that are unfair to consumers. Platforms are liable for the products listed.', source: 'Rule 4, Consumer Protection (E-Commerce) Rules, 2020' },
+  'it-66c': { act: 'IT Act', number: 'S. 66C', title: 'Identity theft', simplified: 'Dishonestly or fraudulently using another person\'s electronic signature, password, or any other unique identification is punishable with imprisonment up to 3 years and fine up to ₹1 lakh.', source: 'Section 66C, Information Technology Act, 2000' },
+  'it-66d': { act: 'IT Act', number: 'S. 66D', title: 'Cheating by personation using computer', simplified: 'Cheating by impersonation using a computer resource or communication device is punishable with imprisonment up to 3 years and fine up to ₹1 lakh.', source: 'Section 66D, IT Act, 2000' },
+  'it-66e': { act: 'IT Act', number: 'S. 66E', title: 'Violation of privacy', simplified: 'Capturing, publishing or transmitting a private image of another person without consent — under circumstances violating their privacy — is punishable with imprisonment up to 3 years and fine up to ₹2 lakh.', source: 'Section 66E, IT Act, 2000' },
+  'it-67': { act: 'IT Act', number: 'S. 67', title: 'Obscene content', simplified: 'Publishing or transmitting obscene material in electronic form is a criminal offence, punishable on first conviction with imprisonment up to 3 years and fine up to ₹5 lakh.', source: 'Section 67, IT Act, 2000' },
+  'rte-12': { act: 'RTE Act', number: 'S. 12(1)(c)', title: 'Private school reservation', simplified: 'Private unaided schools must admit at least 25% of their entry-level class from children of economically weaker sections and disadvantaged groups in the neighborhood, and provide free education until Class 8.', source: 'Section 12(1)(c), Right of Children to Free and Compulsory Education Act, 2009' },
+  'ugc-ragging': { act: 'UGC Regulations', number: '2009', title: 'Prohibition of ragging', simplified: 'Ragging in any form — physical, verbal, psychological — is prohibited in all higher educational institutions. Institutions must have anti-ragging committees and squads. Offenders face penalties up to expulsion and criminal prosecution.', source: 'UGC Regulations on Curbing the Menace of Ragging in Higher Educational Institutions, 2009' },
+  'tpa-106': { act: 'Transfer of Property Act', number: 'S. 106', title: 'Notice to quit', simplified: 'In the absence of a contract or local law, a month-to-month tenancy can be terminated only by 15 days\' written notice. Eviction cannot be by force — it requires legal process.', source: 'Section 106, Transfer of Property Act, 1882' },
+  'sra-6': { act: 'Specific Relief Act', number: 'S. 6', title: 'Recovery of possession', simplified: 'A person dispossessed of immovable property without their consent, otherwise than by due course of law, may recover possession through a suit filed within 6 months. No one can be evicted by force.', source: 'Section 6, Specific Relief Act, 1963' },
+};
+
+const SCENARIOS = [
+  {
+    id: 's1', domain: 'police', difficulty: 2, lang: 'en',
+    title: 'Arrest at your door',
+    situation: 'Two police officers come to your home at 11 PM. They say they are arresting your brother in connection with a theft nearby. Your brother asks why he is being arrested.',
+    choices: [
+      { id: 'a', text: 'The police don\'t need to tell him anything — he must go silently.', correct: false, explanation: 'Incorrect. Section 50(1) CrPC and Article 22(1) of the Constitution require police to inform every arrested person of the grounds of arrest as soon as possible.' },
+      { id: 'b', text: 'Police must tell him the reason for his arrest.', correct: true, explanation: 'Correct. Both CrPC §50(1) and Article 22(1) guarantee every arrested person the right to be informed of the grounds of arrest. This is a non-negotiable safeguard.' },
+      { id: 'c', text: 'A warrant is required for every arrest, no exceptions.', correct: false, explanation: 'Incorrect. For cognizable offences like theft, CrPC §41 allows arrest without a warrant if the officer has reasonable grounds.' },
+      { id: 'd', text: 'Nobody can be arrested at night under any circumstance.', correct: false, explanation: 'Incorrect. There is no general bar on night arrests. For women, §46(4) restricts post-sunset arrests, but no blanket rule applies to all persons.' },
+    ],
+    laws: ['crpc-50', 'art-22-1', 'crpc-41'],
+    concept: 'Right to know grounds of arrest',
+  },
+  {
+    id: 's2', domain: 'police', difficulty: 2, lang: 'en',
+    title: 'Informing family after arrest',
+    situation: 'You are arrested at a protest. You ask to call your parents to tell them where you are. The officer says "no calls allowed from the station."',
+    choices: [
+      { id: 'a', text: 'The officer is correct — no calls allowed after arrest.', correct: false, explanation: 'Incorrect. This contradicts §50A CrPC and the D.K. Basu guidelines which guarantee the right to have a relative/friend informed.' },
+      { id: 'b', text: 'You have a right to have one relative or friend informed of your arrest and place of detention.', correct: true, explanation: 'Correct. §50A CrPC obligates police to inform a nominated person of your arrest. The D.K. Basu guidelines (1997) reinforced this.' },
+      { id: 'c', text: 'You can only call a lawyer, not family.', correct: false, explanation: 'Incorrect. Both rights co-exist: Article 22(1) gives the right to a lawyer, and §50A gives the right to inform a relative/friend.' },
+      { id: 'd', text: 'You can call only after being produced before a magistrate.', correct: false, explanation: 'Incorrect. The right attaches at the time of arrest, not after magistrate production.' },
+    ],
+    laws: ['crpc-50a', 'art-22-1'],
+    concept: 'Right to inform on arrest',
+  },
+  {
+    id: 's3', domain: 'police', difficulty: 3, lang: 'en',
+    title: 'Station "questioning" invitation',
+    situation: 'A police officer visits your office and says "come with us to the station for questioning in a cheating case." The offence is punishable with up to 3 years in prison.',
+    choices: [
+      { id: 'a', text: 'You must go immediately — refusal is a crime.', correct: false, explanation: 'Incorrect. The Supreme Court in Arnesh Kumar (2014) emphasized that for offences punishable up to 7 years, arrest is not automatic.' },
+      { id: 'b', text: 'Police can issue a written notice under §41A CrPC requiring you to appear; immediate arrest is generally not justified for this offence class.', correct: true, explanation: 'Correct. Post-Arnesh Kumar, §41A CrPC requires a notice of appearance for offences up to 7 years, with arrest only on failure to comply.' },
+      { id: 'c', text: 'The officer can force you only if they use handcuffs.', correct: false, explanation: 'Incorrect. Handcuffing is not a legal requirement or license for arrest. The Prem Shankar Shukla case holds handcuffing to be ordinarily impermissible.' },
+      { id: 'd', text: 'You must have a lawyer present before anything can happen.', correct: false, explanation: 'Incorrect. A lawyer cannot be present during interrogation itself (only within visible distance per D.K. Basu), but you have the right to consult a lawyer.' },
+    ],
+    laws: ['crpc-41a', 'crpc-41'],
+    concept: 'Notice vs. arrest (minor offences)',
+  },
+  {
+    id: 's4', domain: 'police', difficulty: 3, lang: 'en',
+    title: 'Search of your home',
+    situation: 'A police officer wants to search your home. They have no warrant. When asked, they say "we don\'t need one — we\'re the police."',
+    choices: [
+      { id: 'a', text: 'Police can search any place at any time without a warrant.', correct: false, explanation: 'Incorrect. Searches require either a warrant, or §165 CrPC procedure (recorded reasons in writing, urgency).' },
+      { id: 'b', text: 'Warrantless search is allowed only in limited situations, requires recorded reasons, and needs two independent local witnesses.', correct: true, explanation: 'Correct. §165 CrPC allows warrantless search only on reasonable grounds with written reasons. §100 CrPC requires two independent local witnesses.' },
+      { id: 'c', text: 'Police need a warrant only for searches between 10 PM and 6 AM.', correct: false, explanation: 'Incorrect. The time of day is not the primary test; the legal basis is.' },
+      { id: 'd', text: 'If you object, the police cannot search at all.', correct: false, explanation: 'Incorrect. You cannot necessarily prevent a lawful search, but procedure must be followed. Your recourse is to insist on witnesses and to document violations.' },
+    ],
+    laws: ['crpc-165', 'crpc-100'],
+    concept: 'Search procedure safeguards',
+  },
+  {
+    id: 's5', domain: 'police', difficulty: 3, lang: 'en',
+    title: 'Evening arrest of a woman',
+    situation: 'Police officers arrive at a woman\'s home at 8 PM wanting to arrest her for a minor offence. Only male officers are present.',
+    choices: [
+      { id: 'a', text: 'Male officers can arrest women at any time.', correct: false, explanation: 'Incorrect. §46(4) CrPC restricts post-sunset arrests of women and requires arrest ordinarily by a woman officer.' },
+      { id: 'b', text: 'A woman should generally not be arrested after sunset and before sunrise, except with prior written permission of a Judicial Magistrate. Arrest should ordinarily be by a woman officer.', correct: true, explanation: 'Correct. §46(4) CrPC safeguard; D.K. Basu guidelines also reinforce this.' },
+      { id: 'c', text: 'A woman can only be arrested at a police station, not at home.', correct: false, explanation: 'Incorrect. There is no such rule; the restriction is on timing and mode.' },
+      { id: 'd', text: 'A female family member must be present for every arrest of a woman.', correct: false, explanation: 'Incorrect. Not a blanket requirement. The primary safeguards are time-of-day and woman officer.' },
+    ],
+    laws: ['crpc-46-4'],
+    concept: 'Arrest safeguards for women',
+  },
+  {
+    id: 's6', domain: 'workplace', difficulty: 2, lang: 'en',
+    title: 'Workplace harassment — where to complain',
+    situation: 'You work at a private company with 30 employees. A senior colleague repeatedly makes unwelcome comments about your appearance. You want to file a formal complaint.',
+    choices: [
+      { id: 'a', text: 'You must go to the police first — companies don\'t handle this.', correct: false, explanation: 'Incorrect. The POSH Act provides a dedicated internal mechanism. Police complaint is a separate option, not a prerequisite.' },
+      { id: 'b', text: 'Your company must have an Internal Complaints Committee (ICC) where you can file a written complaint.', correct: true, explanation: 'Correct. POSH Act §4 mandates an ICC at every workplace with 10+ employees. §9 governs how complaints are filed.' },
+      { id: 'c', text: 'You can complain only if the harasser is a man.', correct: false, explanation: 'Incorrect. The POSH Act does not restrict by gender of the respondent; the Act\'s protections apply regardless.' },
+      { id: 'd', text: 'You must resign before filing.', correct: false, explanation: 'Incorrect. The law protects employees during and after such complaints; resignation is not required.' },
+    ],
+    laws: ['posh-4', 'posh-9'],
+    concept: 'Internal Complaints Committee',
+  },
+  {
+    id: 's7', domain: 'workplace', difficulty: 3, lang: 'en',
+    title: 'Missed the 3-month POSH deadline',
+    situation: 'An incident of workplace sexual harassment happened 4 months ago. You weren\'t ready to complain earlier. A friend says it\'s now too late.',
+    choices: [
+      { id: 'a', text: 'Your friend is right — the 3-month deadline has expired.', correct: false, explanation: 'Incorrect. The deadline is extendable — §9 proviso allows up to 3 additional months.' },
+      { id: 'b', text: 'The ICC can extend the deadline by up to 3 more months if you explain why you couldn\'t file earlier.', correct: true, explanation: 'Correct. §9 proviso of POSH Act permits an extension of up to 3 further months for reasons to be recorded in writing.' },
+      { id: 'c', text: 'You can file any time — there is no deadline.', correct: false, explanation: 'Incorrect. There is a statutory time frame, though extendable.' },
+      { id: 'd', text: 'You must go straight to court since the ICC period is over.', correct: false, explanation: 'Incorrect. The extension route exists within the ICC framework.' },
+    ],
+    laws: ['posh-9'],
+    concept: 'POSH complaint timelines',
+  },
+  {
+    id: 's8', domain: 'workplace', difficulty: 3, lang: 'en',
+    title: 'Termination during pregnancy',
+    situation: 'You inform your employer you are pregnant. Your manager says "we\'ll terminate you before your leave starts to avoid paying maternity benefits."',
+    choices: [
+      { id: 'a', text: 'Employers can terminate for any reason with notice.', correct: false, explanation: 'Incorrect. §12 of the Maternity Benefit Act specifically prohibits dismissal that deprives a woman of maternity benefits.' },
+      { id: 'b', text: 'Terminating a woman during pregnancy in a way that deprives her of maternity benefits is expressly prohibited and challengeable.', correct: true, explanation: 'Correct. §12 Maternity Benefit Act, 1961 prohibits such dismissal.' },
+      { id: 'c', text: 'Maternity benefits only apply to government employees.', correct: false, explanation: 'Incorrect. The Act covers most establishments employing 10+ employees, including private sector.' },
+      { id: 'd', text: 'Only women employed over 5 years qualify.', correct: false, explanation: 'Incorrect. The eligibility threshold is 80 days of work in the 12 months preceding the expected date of delivery.' },
+    ],
+    laws: ['mat-12'],
+    concept: 'Maternity rights — protection from dismissal',
+  },
+  {
+    id: 's9', domain: 'consumer', difficulty: 1, lang: 'en',
+    title: 'Damaged product from online seller',
+    situation: 'You bought a phone online. It arrived with a cracked screen — clearly damaged before delivery. The seller replies "no returns" and refuses.',
+    choices: [
+      { id: 'a', text: '"No returns" policy is binding — you must keep it.', correct: false, explanation: 'Incorrect. A blanket "no returns" policy cannot override statutory consumer rights under the CPA 2019 and E-Commerce Rules.' },
+      { id: 'b', text: 'You have a right to a refund, replacement, or repair; blanket no-return policies cannot override statutory rights.', correct: true, explanation: 'Correct. CPA 2019 and the E-Commerce Rules, 2020 (Rule 4) require platforms to have fair return/refund processes and treat defective delivery as an unfair trade practice.' },
+      { id: 'c', text: 'You can complain only if damage exceeds ₹10,000.', correct: false, explanation: 'Incorrect. There is no such threshold for consumer rights. Value only affects which commission hears the dispute.' },
+      { id: 'd', text: 'Online purchases have no consumer protection.', correct: false, explanation: 'Incorrect. The Consumer Protection (E-Commerce) Rules, 2020 specifically govern online commerce.' },
+    ],
+    laws: ['cpa-2-47', 'cpa-ec-4'],
+    concept: 'Defective goods — consumer remedies',
+  },
+  {
+    id: 's10', domain: 'consumer', difficulty: 2, lang: 'en',
+    title: 'E-commerce platform blames delivery partner',
+    situation: 'An e-commerce seller sends you a different product than what you ordered. They refuse replacement, saying the issue is with the delivery partner.',
+    choices: [
+      { id: 'a', text: 'It\'s the delivery partner\'s fault — sort it out with them.', correct: false, explanation: 'Incorrect. Platforms cannot escape liability by blaming intermediaries they engaged.' },
+      { id: 'b', text: 'The e-commerce entity has duties under the E-Commerce Rules and cannot deny replacement based on who the seller or delivery partner is.', correct: true, explanation: 'Correct. Rule 4 of the Consumer Protection (E-Commerce) Rules, 2020 places clear accountability on e-commerce entities.' },
+      { id: 'c', text: 'You can complain only if you paid by card, not UPI.', correct: false, explanation: 'Incorrect. Payment mode is irrelevant to consumer rights.' },
+      { id: 'd', text: 'You need a police report first.', correct: false, explanation: 'Incorrect. A police report is not a prerequisite to consumer remedies.' },
+    ],
+    laws: ['cpa-ec-4'],
+    concept: 'E-commerce platform accountability',
+  },
+  {
+    id: 's11', domain: 'cyber', difficulty: 2, lang: 'en',
+    title: 'Fake profile impersonating you',
+    situation: 'Someone has created a fake social media profile using your photos and name, and is messaging your contacts asking for money.',
+    choices: [
+      { id: 'a', text: 'Platforms don\'t act on these — nothing you can do.', correct: false, explanation: 'Incorrect. Platforms have grievance officers under the IT Rules 2021 and must respond to such reports.' },
+      { id: 'b', text: 'This is identity theft and cheating by personation; file on cybercrime.gov.in and with local police, and report to the platform.', correct: true, explanation: 'Correct. IT Act §66C (identity theft) and §66D (cheating by personation via computer resource) apply. IPC §419 and §420 may also apply.' },
+      { id: 'c', text: 'You must first find out who the impostor is.', correct: false, explanation: 'Incorrect. Investigation is the police\'s job. You just need to report.' },
+      { id: 'd', text: 'It\'s only a crime if money was actually taken.', correct: false, explanation: 'Incorrect. Identity misuse and impersonation are offences in themselves, independent of whether money was stolen.' },
+    ],
+    laws: ['it-66c', 'it-66d'],
+    concept: 'Online identity theft',
+  },
+  {
+    id: 's12', domain: 'cyber', difficulty: 3, lang: 'en',
+    title: 'Threat to share private photos',
+    situation: 'Your ex-partner threatens to share private photos of you online unless you meet them.',
+    choices: [
+      { id: 'a', text: 'It\'s not a crime unless they actually share the photos.', correct: false, explanation: 'Incorrect. The threat itself is a criminal offence. Waiting lets the harm compound.' },
+      { id: 'b', text: 'Both the threat and sharing such images are criminal offences; you can file a complaint immediately.', correct: true, explanation: 'Correct. IT Act §66E (privacy violation), §67/§67A (obscene/sexually explicit content), IPC §354C (voyeurism), §506 (criminal intimidation) all apply.' },
+      { id: 'c', text: 'Police can\'t act because the photos have not yet been shared.', correct: false, explanation: 'Incorrect. Criminal intimidation under IPC §506 and anticipatory threats are actionable.' },
+      { id: 'd', text: 'You must settle it privately first.', correct: false, explanation: 'Incorrect — and not safe. Private settlement is not a legal requirement and often emboldens the offender.' },
+    ],
+    laws: ['it-66e', 'it-67'],
+    concept: 'Image-based abuse and criminal intimidation',
+  },
+  {
+    id: 's13', domain: 'housing', difficulty: 2, lang: 'en',
+    title: 'Late-night eviction attempt',
+    situation: 'Your landlord arrives at 10 PM with an oral notice to vacate by morning. They have two people ready to physically remove your belongings.',
+    choices: [
+      { id: 'a', text: 'You must leave — oral notice is valid.', correct: false, explanation: 'Incorrect. §106 TPA and the Specific Relief Act require proper process. Oral same-day eviction is not lawful.' },
+      { id: 'b', text: 'Eviction requires legal process; a landlord cannot forcibly remove you or your belongings without a court order.', correct: true, explanation: 'Correct. §106 TPA requires proper notice. §6 of the Specific Relief Act allows recovery of possession if dispossessed forcibly. State rent control laws add further protections.' },
+      { id: 'c', text: 'You should respond with physical force.', correct: false, explanation: 'Incorrect. Call the police and document the incident — don\'t escalate physically.' },
+      { id: 'd', text: 'Police cannot intervene in any landlord–tenant dispute.', correct: false, explanation: 'Incorrect. Even if the core dispute is civil, police must prevent criminal force, intimidation, and breach of peace.' },
+    ],
+    laws: ['tpa-106', 'sra-6'],
+    concept: 'Protection against forcible eviction',
+  },
+  {
+    id: 's14', domain: 'education', difficulty: 2, lang: 'en',
+    title: 'Private school refuses admission',
+    situation: 'A private unaided school refuses admission to your 7-year-old child, saying they don\'t take students from outside their preferred area.',
+    choices: [
+      { id: 'a', text: 'Private schools can refuse anyone they wish.', correct: false, explanation: 'Incorrect. §12(1)(c) RTE binds even private unaided schools to reserve 25% of entry-level seats.' },
+      { id: 'b', text: 'Under RTE §12(1)(c), private unaided schools must reserve at least 25% of entry-level seats for children from EWS/disadvantaged groups in the neighborhood.', correct: true, explanation: 'Correct. §12(1)(c) RTE Act, 2009 mandates this reservation. Society for Unaided Private Schools v. Union of India (2012) upheld this provision.' },
+      { id: 'c', text: 'Only government schools have to follow RTE.', correct: false, explanation: 'Incorrect. RTE binds aided and unaided private schools, with specified carve-outs.' },
+      { id: 'd', text: 'Your child must be 3–6 years old for any law to apply.', correct: false, explanation: 'Incorrect. RTE covers ages 6 to 14.' },
+    ],
+    laws: ['rte-12'],
+    concept: 'Right to education — reservation in private schools',
+  },
+  {
+    id: 's15', domain: 'education', difficulty: 2, lang: 'en',
+    title: 'Ragging dismissed as "fun"',
+    situation: 'Senior students in your college hostel force new students to do embarrassing acts. The warden says "boys will be boys, it\'s just fun."',
+    choices: [
+      { id: 'a', text: 'This is an internal college matter — no legal recourse.', correct: false, explanation: 'Incorrect. Ragging is punishable under UGC Regulations 2009 and may attract criminal liability.' },
+      { id: 'b', text: 'Ragging in any form is punishable under UGC anti-ragging regulations and may attract criminal liability; complain to the anti-ragging squad, UGC helpline 1800-180-5522, and police if needed.', correct: true, explanation: 'Correct. UGC Regulations on Curbing the Menace of Ragging (2009); Vishwa Jagriti Mission v. Central Government (2001).' },
+      { id: 'c', text: 'Only physical ragging is illegal.', correct: false, explanation: 'Incorrect. Psychological, verbal, and any form of ragging is prohibited.' },
+      { id: 'd', text: 'You must prove intent to harm before complaining.', correct: false, explanation: 'Incorrect. The definition of ragging under the regulations is broad; intent to physically harm is not a threshold.' },
+    ],
+    laws: ['ugc-ragging'],
+    concept: 'Anti-ragging law',
+  },
+  {
+    id: 's16', domain: 'police', difficulty: 3, lang: 'en',
+    title: 'Asked to sign a confession',
+    situation: 'You are being interrogated. An officer asks you to sign a confession statement. No lawyer is present.',
+    choices: [
+      { id: 'a', text: 'You must sign — refusal is contempt.', correct: false, explanation: 'Incorrect. There is no duty to sign a confession, and Article 20(3) protects against compelled self-incrimination.' },
+      { id: 'b', text: 'You have a right against self-incrimination. You need not sign. Confessions to police are generally inadmissible (Evidence Act §25), and confessions to a Magistrate require §164 CrPC safeguards.', correct: true, explanation: 'Correct. Article 20(3) Constitution; §25 Evidence Act (confession to police inadmissible); §164 CrPC (procedure for recording confessions before Magistrate).' },
+      { id: 'c', text: 'You can only refuse if a lawyer instructs you to.', correct: false, explanation: 'Incorrect. The right is personal and does not depend on legal instruction, though consulting a lawyer is advisable.' },
+      { id: 'd', text: 'You must sign first and challenge later.', correct: false, explanation: 'Incorrect. Signing under compulsion harms your case and still doesn\'t create lawful admissibility issues for the police.' },
+    ],
+    laws: ['art-20-3'],
+    concept: 'Right against self-incrimination',
+  },
+  {
+    id: 's17', domain: 'police', difficulty: 2, lang: 'en',
+    title: 'The 24-hour rule',
+    situation: 'Your friend was arrested 30 hours ago. They have not been produced before a magistrate. The family is told they\'ll be produced "whenever convenient."',
+    choices: [
+      { id: 'a', text: 'Police can hold someone as long as the investigation requires.', correct: false, explanation: 'Incorrect. Article 22(2) caps detention at 24 hours without magistrate\'s order.' },
+      { id: 'b', text: 'Every arrested person must be produced before a Magistrate within 24 hours (excluding travel time); holding beyond this without magistrate\'s order is unlawful.', correct: true, explanation: 'Correct. Article 22(2) Constitution; §57 CrPC.' },
+      { id: 'c', text: '24 hours includes travel time to the nearest magistrate.', correct: false, explanation: 'Incorrect. Travel time is expressly excluded — but travel time is not a license for indefinite delay.' },
+      { id: 'd', text: 'The rule applies only on weekdays.', correct: false, explanation: 'Incorrect. There is no weekday/weekend carve-out. Magistrates on duty handle such productions.' },
+    ],
+    laws: ['art-22-2'],
+    concept: 'Production before magistrate within 24 hours',
+  },
+  {
+    id: 's18', domain: 'consumer', difficulty: 3, lang: 'en',
+    title: 'Undisclosed hospital charges',
+    situation: 'A private hospital charges you ₹50,000 extra for services that were never disclosed in the pre-admission estimate.',
+    choices: [
+      { id: 'a', text: 'Hospitals are not covered by consumer law.', correct: false, explanation: 'Incorrect. IMA v. V.P. Shantha (1995) settled that paid medical services fall under consumer law.' },
+      { id: 'b', text: 'Paid medical services fall under consumer protection law; undisclosed charges may be an unfair trade practice and actionable.', correct: true, explanation: 'Correct. CPA 2019 and IMA v. V.P. Shantha (1995). Free treatment is outside the scope; paid services are covered.' },
+      { id: 'c', text: 'You can complain only after discharge.', correct: false, explanation: 'Incorrect. You may raise grievances during and after treatment.' },
+      { id: 'd', text: 'Only government hospitals are subject to complaints.', correct: false, explanation: 'Incorrect. Private hospitals are squarely within consumer law when services are paid.' },
+    ],
+    laws: ['cpa-2-47'],
+    concept: 'Medical services under consumer law',
+  },
+  {
+    id: 's19', domain: 'housing', difficulty: 2, lang: 'en',
+    title: 'Security deposit withheld',
+    situation: 'Your rental ended. You returned the flat in good condition. Your landlord refuses to return the security deposit, saying "the paint is not fresh enough."',
+    choices: [
+      { id: 'a', text: 'Security deposit belongs to the landlord.', correct: false, explanation: 'Incorrect. The deposit is your property held in trust for actual damage beyond normal wear.' },
+      { id: 'b', text: 'Deposits cover actual damage beyond normal wear and tear; unjustified withholding can be challenged in civil court (and in some states/cases, consumer forum).', correct: true, explanation: 'Correct. Indian Contract Act governs; the Model Tenancy Act, 2021 where adopted limits deposits (typically 2 months residential) and requires return within a month.' },
+      { id: 'c', text: 'You must wait 1 year before claiming.', correct: false, explanation: 'Incorrect. There is no such waiting period.' },
+      { id: 'd', text: 'Only written rental agreements protect deposits.', correct: false, explanation: 'Incorrect. Verbal contracts can still give rise to rights, though written agreements are far easier to enforce.' },
+    ],
+    laws: ['tpa-106'],
+    concept: 'Security deposit — return obligations',
+  },
+  {
+    id: 's20', domain: 'cyber', difficulty: 2, lang: 'en',
+    title: 'Morphed obscene image',
+    situation: 'Someone morphs your face onto an obscene image and circulates it in a WhatsApp group.',
+    choices: [
+      { id: 'a', text: 'Since the image is not real, it\'s not a legal issue.', correct: false, explanation: 'Incorrect. Morphed obscene content is squarely within §67/§67A IT Act, regardless of whether the underlying image is authentic.' },
+      { id: 'b', text: 'Creating, sharing, or transmitting such morphed content is a criminal offence under multiple provisions.', correct: true, explanation: 'Correct. IT Act §66E, §67, §67A; IPC §354C (voyeurism), §499 (defamation), §509 (insulting modesty).' },
+      { id: 'c', text: 'Only the original creator is liable.', correct: false, explanation: 'Incorrect. Transmission and further distribution are independently punishable.' },
+      { id: 'd', text: 'You need to know the creator\'s identity first.', correct: false, explanation: 'Incorrect. Reporting can happen without that — investigation is the police\'s job.' },
+    ],
+    laws: ['it-66e', 'it-67'],
+    concept: 'Online image-based abuse',
+  },
+];
+
+const ACT_GUIDES = {
+  'police-at-door': {
+    icon: '🚔', color: 'blue',
+    title: 'Police is at my door',
+    mustKnow: [
+      'Police must tell you the grounds of arrest (CrPC §50, Art. 22(1)).',
+      'For offences punishable up to 7 years, a §41A notice to appear is usually issued — not immediate arrest.',
+      'You have a right to inform a family member or friend (§50A CrPC).',
+      'You cannot be held beyond 24 hours without a magistrate\'s order (Art. 22(2)).',
+      'A woman should not ordinarily be arrested after sunset (§46(4) CrPC).',
+    ],
+    canSay: [
+      'What is the offence I am being arrested for?',
+      'Please show me your ID and — if required — the warrant.',
+      'I want to inform my family and consult a lawyer.',
+      'Please note the exact time of arrest.',
+    ],
+    document: [
+      'Names and badge numbers of officers',
+      'Exact time of arrival and arrest',
+      'Items seized and the witnesses present',
+      'Whether proper witnesses were involved in any search',
+    ],
+    callFirst: [
+      'A family member',
+      'A lawyer — or National Legal Services Authority (helpline: 15100)',
+      'Emergency: 112',
+    ],
+  },
+  'employer-threatening': {
+    icon: '💼', color: 'amber',
+    title: 'My employer is threatening me',
+    mustKnow: [
+      'Termination must follow due process as per your contract and applicable labour laws.',
+      'If the threat involves harassment or retaliation for a POSH complaint, POSH Act protections apply.',
+      'Final settlement (gratuity, PF, unpaid wages) is a statutory right.',
+      'Termination during pregnancy that deprives maternity benefits is prohibited.',
+    ],
+    canSay: [
+      'Please put this in writing.',
+      'I would like a copy of my employment contract and policies.',
+      'What is the reason for termination?',
+      'When will my final settlement be paid?',
+    ],
+    document: [
+      'Save emails, messages, memos',
+      'Dates, times, and witnesses of incidents',
+      'Pay slips and attendance records',
+      'Any verbal threats (note words, place, time)',
+    ],
+    callFirst: [
+      'HR / Internal Complaints Committee (for POSH)',
+      'Labour Commissioner (state helpline varies)',
+      'Shram Suvidha portal (for central PF/labour)',
+      'A labour lawyer',
+    ],
+  },
+  'landlord-misbehaving': {
+    icon: '🏠', color: 'emerald',
+    title: 'My landlord is misbehaving',
+    mustKnow: [
+      'Eviction requires legal process — never by force (§6 Specific Relief Act).',
+      'A landlord cannot cut off essential services (water, power) as pressure.',
+      'Security deposit belongs to you, subject to deductions for actual damage.',
+      'Under the Model Tenancy Act (where adopted), deposit is capped and must be returned within a month.',
+    ],
+    canSay: [
+      'Please give me written notice.',
+      'What is the reason for eviction?',
+      'I will not leave without legal process.',
+    ],
+    document: [
+      'Photos/videos of the flat\'s condition',
+      'All rent receipts / payment proofs',
+      'Copies of the rental agreement',
+      'Witnesses to any confrontation',
+    ],
+    callFirst: [
+      'Local police (for force/intimidation — dial 112)',
+      'Rent Control Authority (where applicable)',
+      'Legal aid: NALSA 15100',
+    ],
+  },
+  'cheated-seller': {
+    icon: '🛒', color: 'purple',
+    title: 'I was cheated by a seller',
+    mustKnow: [
+      'Defective goods → right to refund, replacement, or repair.',
+      'E-commerce platforms are liable under the E-Commerce Rules, 2020.',
+      'Misleading descriptions and withheld information are unfair trade practices.',
+      'Consumer Commissions hear disputes by value thresholds.',
+    ],
+    canSay: [
+      'I want a full refund for this defective product.',
+      'What is your grievance redressal process?',
+      'Please give me a written response within a stated time.',
+    ],
+    document: [
+      'Order ID, listing screenshots, invoice',
+      'Payment proof',
+      'Photos/videos of defect',
+      'All messages with the seller',
+    ],
+    callFirst: [
+      'National Consumer Helpline: 1915',
+      'consumerhelpline.gov.in (online complaint)',
+      'District Consumer Commission (if unresolved)',
+    ],
+  },
+  'online-incident': {
+    icon: '💻', color: 'rose',
+    title: 'Something happened online',
+    mustKnow: [
+      'Financial fraud: dial 1930 immediately — speed matters for freezing funds.',
+      'Report at cybercrime.gov.in (non-financial: harassment, impersonation, threats).',
+      'Don\'t delete evidence — preserve screenshots, messages, URLs.',
+      'Intermediaries have legal duties under the IT Rules, 2021.',
+    ],
+    canSay: [
+      '(Mostly online/phone reporting — keep language clear and factual.)',
+      'Also report to the platform itself for fast action on content removal.',
+    ],
+    document: [
+      'Screenshots with the URL visible',
+      'Timestamps',
+      'User IDs / profile handles involved',
+      'Any messages — preserve originals, don\'t forward carelessly',
+    ],
+    callFirst: [
+      'Cyber crime helpline: 1930 (financial fraud)',
+      'cybercrime.gov.in',
+      'Local police / cyber cell',
+      'Emergency threats: 112',
+    ],
+  },
+  'school-unfair': {
+    icon: '🎓', color: 'teal',
+    title: 'My school/college is being unfair',
+    mustKnow: [
+      'Ragging is prohibited and punishable under UGC Regulations.',
+      'RTE guarantees free education for children 6–14, with 25% reservation in private schools.',
+      'Capitation fees are illegal in many states.',
+      'Students with disabilities have protections under the RPwD Act, 2016.',
+    ],
+    canSay: [
+      'Please provide a written response and cite the regulation.',
+      'What is your grievance redressal procedure?',
+    ],
+    document: [
+      'All official communications',
+      'Incident dates, witnesses, photos/videos (if safe)',
+      'Fee receipts and admission letters',
+    ],
+    callFirst: [
+      'Anti-ragging helpline: 1800-180-5522',
+      'UGC / AICTE / NCTE grievance portals',
+      'School/college management in writing',
+      'State Education Department',
+    ],
+  },
+};
+
+// Pending community contributions (mock, for Admin view)
+const INITIAL_PENDING = [
+  {
+    id: 'c1',
+    contributor: 'Rohit S.',
+    reputation: 45,
+    submittedAt: '2026-04-17T09:30:00Z',
+    type: 'scenario',
+    domain: 'housing',
+    title: 'Loud music from neighbor — can police act?',
+    situation: 'My neighbor plays loud music every night past midnight. Police said they cannot do anything as it is a civil matter between residents.',
+    choices: [
+      { text: 'Police cannot act — it is only a civil matter.', correct: false, explanation: 'Police conflated civil disputes with noise nuisance, which has statutory limits.' },
+      { text: 'Noise pollution rules set decibel limits by time and zone; police can act on complaints.', correct: true, explanation: 'Noise Pollution (Regulation and Control) Rules, 2000.' },
+      { text: 'You must sue your neighbor in civil court first.', correct: false, explanation: 'Not a prerequisite.' },
+      { text: 'Noise is legal between 10 AM and 10 PM.', correct: false, explanation: 'Residential zones have stricter limits throughout.' },
+    ],
+    autoChecks: {
+      schema: 'pass',
+      citationExists: 'fail',
+      contradiction: 'pass',
+      duplicate: 'pass',
+      difficulty: 'pass',
+    },
+    flaggedCodes: ['R4'],
+    suggestedReviewer: 'Tier 1',
+  },
+  {
+    id: 'c2',
+    contributor: 'Ananya P.',
+    reputation: 120,
+    submittedAt: '2026-04-18T11:10:00Z',
+    type: 'scenario',
+    domain: 'consumer',
+    title: 'Bank refuses account opening without Aadhaar',
+    situation: 'A private bank refused to open my savings account because I declined to link Aadhaar. They said RBI mandates it.',
+    choices: [
+      { text: 'Aadhaar linking is compulsory for all bank accounts.', correct: false, explanation: 'Post-Puttaswamy (2018), Aadhaar cannot be compulsorily demanded for private bank accounts.' },
+      { text: 'After Puttaswamy (2018), Aadhaar cannot be compulsorily demanded for opening a private bank account; other KYC documents must be accepted.', correct: true, explanation: 'K.S. Puttaswamy v. Union of India (2018) struck down mandatory Aadhaar linking for non-statutory purposes.' },
+      { text: 'Banks can refuse any customer.', correct: false, explanation: 'RBI KYC norms permit multiple IDs.' },
+      { text: 'Only nationalized banks must open accounts without Aadhaar.', correct: false, explanation: 'The Puttaswamy ruling is general.' },
+    ],
+    autoChecks: {
+      schema: 'pass',
+      citationExists: 'pass',
+      contradiction: 'pass',
+      duplicate: 'pass',
+      difficulty: 'pass',
+    },
+    flaggedCodes: [],
+    suggestedReviewer: 'Tier 2 (constitutional nuance)',
+  },
+  {
+    id: 'c3',
+    contributor: 'Legal Aid Clinic, DU',
+    reputation: 320,
+    submittedAt: '2026-04-18T16:45:00Z',
+    type: 'simplification',
+    domain: 'constitution',
+    title: 'Simplification edit for Article 21',
+    original: 'No person shall be deprived of his life or personal liberty except according to procedure established by law.',
+    proposed: 'Nobody can be killed or imprisoned unless the law says so.',
+    autoChecks: {
+      schema: 'pass',
+      citationExists: 'pass',
+      contradiction: 'warn',
+      duplicate: 'pass',
+      difficulty: 'pass',
+    },
+    flaggedCodes: ['R6'],
+    reviewerNote: 'Simplification loses the "procedure established by law" nuance and the post-Maneka Gandhi requirement of fair, just and reasonable procedure. "Killed" is misleadingly narrow for "deprived of life".',
+    suggestedReviewer: 'Tier 2',
+  },
+  {
+    id: 'c4',
+    contributor: 'Kavya R.',
+    reputation: 12,
+    submittedAt: '2026-04-19T02:15:00Z',
+    type: 'scenario',
+    domain: 'workplace',
+    title: 'Boss saw my personal texts on work laptop',
+    situation: 'My manager opened my personal WhatsApp on my work laptop without asking and used screenshots against me.',
+    choices: [
+      { text: 'Work laptop = no privacy; manager is free to do anything.', correct: false, explanation: 'Overstated.' },
+      { text: 'Some monitoring may be permitted if policy discloses it; however, accessing personal communications without notice or consent can still raise privacy and evidence admissibility issues.', correct: true, explanation: 'Puttaswamy (2018); workplace policies cannot override fundamental rights wholesale.' },
+      { text: 'Manager commits a crime automatically.', correct: false, explanation: 'Depends on facts and policy.' },
+      { text: 'Only IT team can access work laptops.', correct: false, explanation: 'Not a legal rule.' },
+    ],
+    autoChecks: {
+      schema: 'pass',
+      citationExists: 'pass',
+      contradiction: 'pass',
+      duplicate: 'warn',
+      difficulty: 'pass',
+    },
+    flaggedCodes: ['R5'],
+    reviewerNote: 'Correct answer borders on advisory rather than a clear legal statement — Tier 2 should sharpen it.',
+    suggestedReviewer: 'Tier 2',
+  },
+];
+
+/* ============================================================
+   SM-2 SPACED REPETITION ALGORITHM
+   Maps user correctness to quality (0-5) and computes next due date.
+   ============================================================ */
+
+function sm2(current, quality) {
+  let { ease_factor = 2.5, repetitions = 0, interval_days = 0 } = current || {};
+
+  if (quality < 3) {
+    repetitions = 0;
+    interval_days = 1;
+  } else {
+    repetitions += 1;
+    if (repetitions === 1) interval_days = 1;
+    else if (repetitions === 2) interval_days = 3;
+    else interval_days = Math.max(1, Math.round(interval_days * ease_factor));
+    ease_factor = Math.max(1.3, ease_factor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  }
+  const next_due = new Date(Date.now() + interval_days * 86400000).toISOString();
+  return { ease_factor, repetitions, interval_days, next_due };
+}
+
+// Quality mapping: correct first try=5, correct slow=4, incorrect but close=2, incorrect=1
+function qualityFromAttempt(isCorrect, responseMs) {
+  if (isCorrect) return responseMs < 15000 ? 5 : 4;
+  return responseMs < 30000 ? 2 : 1;
+}
+
+/* ============================================================
+   PERSISTENCE
+   ============================================================ */
+
+const STORAGE_KEY = 'adhikar_state_v1';
+
+function defaultState() {
+  return {
+    attempts: {},      // scenario_id -> [{ choice_id, is_correct, response_ms, ts }]
+    schedule: {},      // scenario_id -> SM-2 state
+    bookmarks: [],
+    streak: 0,
+    lastActiveDate: null,
+    language: 'en',
+    literacyLevel: 1,
+    completedOnboarding: false,
+    interests: [],
+    dailyGoalMinutes: 10,
+    adminDecisions: {},  // contribution_id -> 'approved'|'rejected'|'escalated'
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    return { ...defaultState(), ...JSON.parse(raw) };
+  } catch {
+    return defaultState();
+  }
+}
+
+function saveState(s) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+}
+
+/* ============================================================
+   UI PRIMITIVES
+   ============================================================ */
+
+function Pill({ children, tone='slate' }) {
+  const tones = {
+    slate: 'bg-slate-100 text-slate-700',
+    amber: 'bg-amber-100 text-amber-800',
+    emerald: 'bg-emerald-100 text-emerald-800',
+    rose: 'bg-rose-100 text-rose-800',
+    blue: 'bg-blue-100 text-blue-800',
+    purple: 'bg-purple-100 text-purple-800',
+    teal: 'bg-teal-100 text-teal-800',
+  };
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${tones[tone] || tones.slate}`}>{children}</span>;
+}
+
+function Button({ children, onClick, variant='primary', className='', ...rest }) {
+  const variants = {
+    primary: 'bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950',
+    secondary: 'bg-white border border-slate-300 text-slate-900 hover:bg-slate-50',
+    accent: 'bg-amber-700 text-white hover:bg-amber-800',
+    ghost: 'text-slate-700 hover:bg-slate-100',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700',
+    success: 'bg-emerald-600 text-white hover:bg-emerald-700',
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition ring-focus ${variants[variant]} ${className}`}
+      {...rest}
+    >{children}</button>
+  );
+}
+
+function Card({ children, className='' }) {
+  return <div className={`bg-white rounded-2xl card-shadow ${className}`}>{children}</div>;
+}
+
+/* ============================================================
+   TOP NAV
+   ============================================================ */
+
+function TopNav({ view, setView, streak, adminMode, setAdminMode }) {
+  const items = [
+    { id: 'home', label: 'Home' },
+    { id: 'learn', label: 'Learn' },
+    { id: 'situation', label: 'I\'m in a situation' },
+    { id: 'progress', label: 'Progress' },
+  ];
+  return (
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
+        <button onClick={() => setView('home')} className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg brand-gradient flex items-center justify-center text-white font-serif font-bold text-lg">अ</div>
+          <div>
+            <div className="font-semibold text-slate-900 leading-tight">Adhikar</div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide leading-tight">Know Your Rights</div>
+          </div>
+        </button>
+        <nav className="hidden md:flex items-center gap-1 ml-6">
+          {items.map(i => (
+            <button
+              key={i.id}
+              onClick={() => setView(i.id)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${view === i.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >{i.label}</button>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-3">
+          {streak > 0 && (
+            <div className="hidden sm:flex items-center gap-1.5 text-sm text-slate-600">
+              <span>🔥</span><span className="font-semibold text-slate-900">{streak}</span><span className="text-xs">day{streak !== 1 ? 's' : ''}</span>
+            </div>
+          )}
+          <button
+            onClick={() => { setAdminMode(!adminMode); setView(adminMode ? 'home' : 'admin'); }}
+            className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition ${adminMode ? 'bg-amber-700 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+          >{adminMode ? 'Exit Admin' : 'Admin'}</button>
+        </div>
+      </div>
+      {/* mobile nav */}
+      <nav className="md:hidden border-t border-slate-100 flex overflow-x-auto">
+        {items.map(i => (
+          <button
+            key={i.id}
+            onClick={() => setView(i.id)}
+            className={`flex-1 px-3 py-2.5 text-xs font-medium whitespace-nowrap ${view === i.id ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-500'}`}
+          >{i.label}</button>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+/* ============================================================
+   HOME VIEW
+   ============================================================ */
+
+function HomeView({ state, setState, setView }) {
+  const totalScenariosDone = Object.keys(state.attempts).length;
+  const correctRate = (() => {
+    const all = Object.values(state.attempts).flat();
+    if (all.length === 0) return null;
+    const correct = all.filter(a => a.is_correct).length;
+    return Math.round((correct / all.length) * 100);
+  })();
+
+  const dueToday = useMemo(() => {
+    const now = Date.now();
+    return Object.entries(state.schedule)
+      .filter(([_, s]) => new Date(s.next_due).getTime() <= now)
+      .map(([id]) => id);
+  }, [state.schedule]);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6 fade-in">
+      {/* Hero */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <Card className="md:col-span-2 p-6 sm:p-8 brand-gradient text-white">
+          <div className="text-sm uppercase tracking-wider text-slate-300 mb-2">Legal literacy for India</div>
+          <h1 className="font-serif text-3xl sm:text-4xl leading-tight mb-3">Know your rights. Act with clarity.</h1>
+          <p className="text-slate-200 text-sm sm:text-base max-w-xl mb-6">Learn how real laws work in real situations — police encounters, workplace issues, consumer disputes, cyber crimes, housing, and education.</p>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="accent" onClick={() => setView('learn')}>
+              {dueToday.length > 0 ? `Start daily session (${dueToday.length} due)` : 'Start daily session'}
+            </Button>
+            <Button variant="secondary" onClick={() => setView('situation')} className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20">
+              {"I'm in a situation right now →"}
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">Your progress</div>
+          <div className="space-y-4">
+            <div className="flex items-end gap-1">
+              <div className="text-3xl font-semibold text-slate-900">{totalScenariosDone}</div>
+              <div className="text-sm text-slate-500 pb-1">of {SCENARIOS.length} scenarios</div>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-slate-900 rounded-full transition-all" style={{ width: `${(totalScenariosDone / SCENARIOS.length) * 100}%` }}></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <div className="text-xs text-slate-500">Streak</div>
+                <div className="text-xl font-semibold text-slate-900">{state.streak} 🔥</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Accuracy</div>
+                <div className="text-xl font-semibold text-slate-900">{correctRate === null ? '—' : `${correctRate}%`}</div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Domains */}
+      <div>
+        <h2 className="font-serif text-2xl text-slate-900 mb-4">Explore by domain</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            { id: 'police', label: 'Police & Arrest', icon: '🚔', tone: 'blue', desc: 'Rights during arrest, search, and questioning' },
+            { id: 'workplace', label: 'Workplace', icon: '💼', tone: 'amber', desc: 'Harassment, termination, maternity, gratuity' },
+            { id: 'consumer', label: 'Consumer', icon: '🛒', tone: 'purple', desc: 'Defective goods, e-commerce, service disputes' },
+            { id: 'housing', label: 'Housing', icon: '🏠', tone: 'emerald', desc: 'Rent, eviction, security deposit' },
+            { id: 'cyber', label: 'Cyber', icon: '💻', tone: 'rose', desc: 'Identity theft, online harassment, privacy' },
+            { id: 'education', label: 'Education', icon: '🎓', tone: 'teal', desc: 'RTE, ragging, admissions' },
+          ].map(d => {
+            const count = SCENARIOS.filter(s => s.domain === d.id).length;
+            const done = SCENARIOS.filter(s => s.domain === d.id && state.attempts[s.id]?.length > 0).length;
+            return (
+              <button
+                key={d.id}
+                onClick={() => { setState(s => ({ ...s, _filterDomain: d.id })); setView('learn'); }}
+                className="text-left p-5 bg-white rounded-2xl card-shadow hover:-translate-y-0.5 transition"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="text-2xl">{d.icon}</div>
+                  <Pill tone={d.tone}>{done}/{count}</Pill>
+                </div>
+                <div className="font-semibold text-slate-900 mb-1">{d.label}</div>
+                <div className="text-xs text-slate-500 leading-relaxed">{d.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <Card className="p-5 bg-amber-50 border border-amber-200">
+        <div className="flex gap-3">
+          <div className="text-lg">⚖️</div>
+          <div className="text-sm text-amber-900">
+            <div className="font-semibold mb-1">This is legal literacy, not legal advice.</div>
+            <div>For urgent situations, contact a lawyer. Free legal aid: <strong>NALSA helpline 15100</strong>. Emergency: <strong>112</strong>.</div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ============================================================
+   DAILY LEARN VIEW — scenario queue
+   ============================================================ */
+
+function DailyLearnView({ state, setState, setView }) {
+  const [queue, setQueue] = useState(() => buildQueue(state));
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [sessionStats, setSessionStats] = useState({ correct: 0, total: 0 });
+
+  function buildQueue(s) {
+    const filterDomain = s._filterDomain;
+    const now = Date.now();
+    const dueIds = Object.entries(s.schedule)
+      .filter(([_, sch]) => new Date(sch.next_due).getTime() <= now)
+      .map(([id]) => id);
+    const due = SCENARIOS.filter(sc => dueIds.includes(sc.id));
+    const neverAttempted = SCENARIOS.filter(sc => !s.attempts[sc.id]);
+    let pool = [...due];
+    for (const s_ of neverAttempted) { if (pool.length < 5) pool.push(s_); }
+    if (filterDomain) pool = pool.filter(sc => sc.domain === filterDomain);
+    // shuffle lightly
+    return pool.slice(0, 5);
+  }
+
+  const current = queue[currentIdx];
+
+  if (!current) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 fade-in">
+        <Card className="p-8 text-center">
+          <div className="text-4xl mb-3">✨</div>
+          <h2 className="font-serif text-2xl mb-2">Nothing due today</h2>
+          <p className="text-slate-600 mb-6">You've caught up. Come back tomorrow, or explore a new domain.</p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => setView('home')} variant="secondary">Back home</Button>
+            <Button onClick={() => { setState(s => ({ ...s, _filterDomain: null })); setQueue(buildQueue({ ...state, _filterDomain: null })); setCurrentIdx(0); }}>Practice any domain</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  function onAttemptComplete(isCorrect, responseMs, choiceId) {
+    setState(s => {
+      const q = qualityFromAttempt(isCorrect, responseMs);
+      const sched = sm2(s.schedule[current.id], q);
+      const attempt = { choice_id: choiceId, is_correct: isCorrect, response_ms: responseMs, ts: new Date().toISOString() };
+      const prevAttempts = s.attempts[current.id] || [];
+      // Update streak
+      const today = new Date().toDateString();
+      let streak = s.streak;
+      if (s.lastActiveDate !== today) {
+        const yday = new Date(Date.now() - 86400000).toDateString();
+        streak = (s.lastActiveDate === yday ? s.streak + 1 : 1);
+      }
+      return {
+        ...s,
+        attempts: { ...s.attempts, [current.id]: [...prevAttempts, attempt] },
+        schedule: { ...s.schedule, [current.id]: sched },
+        streak,
+        lastActiveDate: today,
+      };
+    });
+    setSessionStats(st => ({ correct: st.correct + (isCorrect ? 1 : 0), total: st.total + 1 }));
+  }
+
+  function advance() {
+    setCurrentIdx(i => i + 1);
+  }
+
+  // End-of-session
+  if (currentIdx >= queue.length) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 fade-in">
+        <Card className="p-8 text-center">
+          <div className="text-4xl mb-3">🌱</div>
+          <h2 className="font-serif text-2xl mb-2">Session complete</h2>
+          <p className="text-slate-600 mb-2">You got <strong>{sessionStats.correct} of {sessionStats.total}</strong> correct.</p>
+          <p className="text-slate-500 text-sm mb-6">{sessionStats.correct === sessionStats.total ? 'Perfect. We\'ll re-test these at longer intervals.' : 'The ones you missed will surface again soon — that\'s how the spaced repetition works.'}</p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => setView('progress')} variant="secondary">See progress</Button>
+            <Button onClick={() => setView('home')}>Back home</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 fade-in">
+      {/* progress strip */}
+      <div className="flex items-center gap-2 mb-4 text-xs text-slate-500">
+        <span>{currentIdx + 1} of {queue.length}</span>
+        <div className="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+          <div className="h-full bg-slate-900 transition-all" style={{ width: `${((currentIdx) / queue.length) * 100}%` }}></div>
+        </div>
+        <button onClick={() => setView('home')} className="text-slate-400 hover:text-slate-600">Exit</button>
+      </div>
+      <ScenarioCard key={current.id} scenario={current} onComplete={onAttemptComplete} onNext={advance} />
+    </div>
+  );
+}
+
+/* ============================================================
+   SCENARIO CARD — the core learning interaction
+   ============================================================ */
+
+function ScenarioCard({ scenario, onComplete, onNext }) {
+  const [selected, setSelected] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [startTime] = useState(Date.now());
+  const [showLaw, setShowLaw] = useState(false);
+
+  function handleSelect(choice) {
+    if (revealed) return;
+    setSelected(choice.id);
+    setRevealed(true);
+    const responseMs = Date.now() - startTime;
+    onComplete(choice.correct, responseMs, choice.id);
+  }
+
+  const domainTone = ({ police: 'blue', workplace: 'amber', consumer: 'purple', housing: 'emerald', cyber: 'rose', education: 'teal' }[scenario.domain]) || 'slate';
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="p-5 sm:p-6 border-b border-slate-100">
+        <div className="flex items-center gap-2 mb-3">
+          <Pill tone={domainTone}>{scenario.domain}</Pill>
+          <Pill>difficulty {scenario.difficulty}</Pill>
+        </div>
+        <h3 className="font-serif text-xl sm:text-2xl text-slate-900 mb-3">{scenario.title}</h3>
+        <p className="law-text text-slate-700 text-base">{scenario.situation}</p>
+      </div>
+
+      <div className="p-5 sm:p-6 space-y-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">What is the legally correct answer?</div>
+        {scenario.choices.map(choice => {
+          const isSelected = selected === choice.id;
+          let classes = 'border-slate-200 hover:border-slate-400 bg-white';
+          if (revealed) {
+            if (choice.correct) classes = 'border-emerald-500 bg-emerald-50';
+            else if (isSelected && !choice.correct) classes = 'border-rose-400 bg-rose-50';
+            else classes = 'border-slate-200 bg-white opacity-60';
+          } else if (isSelected) {
+            classes = 'border-slate-900 bg-slate-50';
+          }
+          return (
+            <button
+              key={choice.id}
+              onClick={() => handleSelect(choice)}
+              disabled={revealed}
+              className={`w-full text-left p-4 rounded-lg border-2 transition ${classes} ${revealed ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              <div className="flex gap-3">
+                <div className={`flex-none w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-semibold ${revealed && choice.correct ? 'bg-emerald-500 border-emerald-500 text-white' : revealed && isSelected ? 'bg-rose-400 border-rose-400 text-white' : 'border-slate-300 text-slate-500'}`}>
+                  {revealed && choice.correct ? '✓' : revealed && isSelected && !choice.correct ? '✕' : choice.id.toUpperCase()}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm text-slate-900 mb-1">{choice.text}</div>
+                  {revealed && (
+                    <div className={`text-xs mt-2 pt-2 border-t ${choice.correct ? 'border-emerald-200 text-emerald-900' : 'border-slate-200 text-slate-600'}`}>
+                      {choice.explanation}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {revealed && (
+        <div className="p-5 sm:p-6 pt-0 space-y-3 fade-in">
+          <div className="bg-slate-50 rounded-lg p-4">
+            <button onClick={() => setShowLaw(!showLaw)} className="flex items-center justify-between w-full text-left">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Read the actual law {showLaw ? '▾' : '▸'}</div>
+            </button>
+            {showLaw && (
+              <div className="mt-3 space-y-3 fade-in">
+                {scenario.laws.map(lid => {
+                  const law = LAW_SECTIONS[lid];
+                  if (!law) return null;
+                  return (
+                    <div key={lid} className="text-sm">
+                      <div className="font-semibold text-slate-900">{law.act} {law.number} — {law.title}</div>
+                      <div className="law-text text-slate-700 mt-1">{law.simplified}</div>
+                      <div className="text-xs text-slate-500 mt-1 italic">{law.source}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => alert('Thank you — routed to legal reviewer queue.')}>⚑ Report issue</Button>
+            <Button onClick={onNext}>Next →</Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ============================================================
+   SITUATION-FIRST VIEW — emergency Act Guides
+   ============================================================ */
+
+function SituationView({ setView }) {
+  const [active, setActive] = useState(null);
+  const g = active && ACT_GUIDES[active];
+
+  if (g) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 fade-in">
+        <button onClick={() => setActive(null)} className="text-sm text-slate-500 hover:text-slate-900 mb-3">← Back</button>
+        <Card>
+          <div className="p-6 border-b border-slate-100">
+            <div className="text-3xl mb-2">{g.icon}</div>
+            <h2 className="font-serif text-2xl sm:text-3xl text-slate-900">{g.title}</h2>
+            <p className="text-xs uppercase tracking-wider text-slate-500 mt-2">Act Guide · lawyer-reviewed</p>
+          </div>
+          <div className="p-6 space-y-6">
+            <ActGuideSection title="What you must know" icon="📖" items={g.mustKnow} />
+            <ActGuideSection title="What you can say / ask for" icon="💬" items={g.canSay} />
+            <ActGuideSection title="What to document" icon="📝" items={g.document} />
+            <ActGuideSection title="Who to call first" icon="📞" items={g.callFirst} tone="emerald" />
+          </div>
+          <div className="p-5 bg-slate-50 border-t border-slate-100 text-xs text-slate-600">
+            <strong>This is a quick guide, not legal advice.</strong> For urgent situations, reach a lawyer — NALSA 15100.
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 fade-in">
+      <div className="mb-6">
+        <h2 className="font-serif text-3xl text-slate-900 mb-1">What's happening?</h2>
+        <p className="text-sm text-slate-500">Tap a situation for a quick, lawyer-reviewed action guide.</p>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {Object.entries(ACT_GUIDES).map(([k, g]) => (
+          <button
+            key={k}
+            onClick={() => setActive(k)}
+            className="text-left p-5 bg-white rounded-2xl card-shadow hover:-translate-y-0.5 transition"
+          >
+            <div className="text-2xl mb-3">{g.icon}</div>
+            <div className="font-semibold text-slate-900">{g.title}</div>
+            <div className="text-xs text-slate-500 mt-1">Tap for quick actions →</div>
+          </button>
+        ))}
+      </div>
+      <Card className="p-4 mt-6 bg-rose-50 border border-rose-200">
+        <div className="text-sm text-rose-900">
+          <strong>In immediate danger?</strong> Dial <strong>112</strong>. Women helpline: <strong>181</strong>. Child helpline: <strong>1098</strong>.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ActGuideSection({ title, icon, items, tone='slate' }) {
+  const toneCls = tone === 'emerald' ? 'text-emerald-900 bg-emerald-50' : 'text-slate-900 bg-slate-50';
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">{icon}</span>
+        <h3 className="font-semibold text-slate-900">{title}</h3>
+      </div>
+      <ul className={`rounded-lg p-4 space-y-2 ${toneCls}`}>
+        {items.map((it, i) => (
+          <li key={i} className="text-sm flex gap-2 leading-relaxed">
+            <span className="text-slate-400 flex-none">▸</span>
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ============================================================
+   PROGRESS VIEW
+   ============================================================ */
+
+function ProgressView({ state }) {
+  const domains = ['police', 'workplace', 'consumer', 'housing', 'cyber', 'education'];
+  const mastery = domains.map(d => {
+    const scenariosInDomain = SCENARIOS.filter(s => s.domain === d);
+    const attemptedIds = scenariosInDomain.filter(s => state.attempts[s.id]?.length > 0);
+    const correctFirstAttempts = attemptedIds.filter(s => state.attempts[s.id][0]?.is_correct).length;
+    return {
+      domain: d,
+      total: scenariosInDomain.length,
+      attempted: attemptedIds.length,
+      mastery: scenariosInDomain.length === 0 ? 0 : correctFirstAttempts / scenariosInDomain.length,
+    };
+  });
+
+  const weakAreas = mastery.filter(m => m.attempted >= 2 && m.mastery < 0.6);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6 fade-in">
+      <div>
+        <h2 className="font-serif text-3xl text-slate-900 mb-1">Your Rights Report</h2>
+        <p className="text-sm text-slate-500">Mastery across six legal domains, based on first-attempt correctness.</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">Mastery radar</div>
+          <RadarChart data={mastery} />
+        </Card>
+
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">Streak & activity</div>
+          <div className="space-y-4">
+            <div className="flex items-baseline gap-2">
+              <div className="text-5xl font-semibold text-slate-900">{state.streak}</div>
+              <div className="text-sm text-slate-500">day streak 🔥</div>
+            </div>
+            <div className="h-px bg-slate-100"></div>
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Total scenarios</div>
+              <div className="text-xl font-semibold text-slate-900">{Object.keys(state.attempts).length}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Total attempts</div>
+              <div className="text-xl font-semibold text-slate-900">{Object.values(state.attempts).flat().length}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Due for revision</div>
+              <div className="text-xl font-semibold text-slate-900">
+                {Object.values(state.schedule).filter(s => new Date(s.next_due).getTime() <= Date.now()).length}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <div className="text-xs uppercase tracking-wider text-slate-500 mb-4">Domain-by-domain</div>
+        <div className="space-y-3">
+          {mastery.map(m => (
+            <div key={m.domain}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="font-medium text-slate-900 capitalize">{m.domain}</div>
+                <div className="text-xs text-slate-500">{m.attempted}/{m.total} attempted · {Math.round(m.mastery * 100)}% mastery</div>
+              </div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${m.mastery >= 0.8 ? 'bg-emerald-500' : m.mastery >= 0.5 ? 'bg-amber-500' : m.mastery > 0 ? 'bg-rose-400' : 'bg-slate-300'}`}
+                  style={{ width: `${Math.max(3, m.mastery * 100)}%` }}
+                ></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {weakAreas.length > 0 && (
+        <Card className="p-5 bg-amber-50 border border-amber-200">
+          <div className="text-sm text-amber-900">
+            <div className="font-semibold mb-2">Weak areas to revisit</div>
+            <ul className="list-disc list-inside space-y-0.5">
+              {weakAreas.map(w => (
+                <li key={w.domain} className="capitalize">{w.domain} — {Math.round(w.mastery * 100)}% mastery</li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function RadarChart({ data }) {
+  const size = 240;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 30;
+  const angles = data.map((_, i) => (Math.PI * 2 * i) / data.length - Math.PI / 2);
+
+  const ringPath = (ratio) => {
+    return data.map((_, i) => {
+      const a = angles[i];
+      const x = cx + Math.cos(a) * r * ratio;
+      const y = cy + Math.sin(a) * r * ratio;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ') + ' Z';
+  };
+
+  const dataPath = data.map((d, i) => {
+    const a = angles[i];
+    const ratio = Math.max(0.04, d.mastery); // min visible
+    const x = cx + Math.cos(a) * r * ratio;
+    const y = cy + Math.sin(a) * r * ratio;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ') + ' Z';
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-xs mx-auto">
+      {[0.25, 0.5, 0.75, 1].map(ratio => (
+        <path key={ratio} d={ringPath(ratio)} className="radar-axis" />
+      ))}
+      {data.map((d, i) => {
+        const a = angles[i];
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} className="radar-axis" />;
+      })}
+      <path d={dataPath} className="radar-data" />
+      {data.map((d, i) => {
+        const a = angles[i];
+        const x = cx + Math.cos(a) * (r + 16);
+        const y = cy + Math.sin(a) * (r + 16);
+        return (
+          <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-slate-600" style={{ fontSize: '10px', textTransform: 'capitalize' }}>
+            {d.domain}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ============================================================
+   ADMIN VIEW — legal reviewer workflow
+   ============================================================ */
+
+function AdminView({ state, setState }) {
+  const [tab, setTab] = useState('queue');
+  const [activeContrib, setActiveContrib] = useState(null);
+
+  const decisions = state.adminDecisions || {};
+  const pending = INITIAL_PENDING.filter(c => !decisions[c.id]);
+  const reviewed = INITIAL_PENDING.filter(c => decisions[c.id]);
+
+  function decide(contribId, decision, note='') {
+    setState(s => ({
+      ...s,
+      adminDecisions: { ...(s.adminDecisions || {}), [contribId]: { decision, note, at: new Date().toISOString() } },
+    }));
+    setActiveContrib(null);
+  }
+
+  if (activeContrib) {
+    const c = activeContrib;
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 fade-in">
+        <button onClick={() => setActiveContrib(null)} className="text-sm text-slate-500 hover:text-slate-900 mb-4">← Back to queue</button>
+
+        <Card className="overflow-hidden">
+          <div className="p-6 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Pill tone="amber">{c.type}</Pill>
+              <Pill tone="blue">{c.domain}</Pill>
+              <Pill>Suggested: {c.suggestedReviewer}</Pill>
+              {c.flaggedCodes.length > 0 && <Pill tone="rose">⚑ {c.flaggedCodes.join(', ')}</Pill>}
+            </div>
+            <h2 className="font-serif text-2xl text-slate-900">{c.title}</h2>
+            <div className="text-xs text-slate-500 mt-2">
+              By <strong>{c.contributor}</strong> · Reputation {c.reputation} · Submitted {new Date(c.submittedAt).toLocaleString()}
+            </div>
+          </div>
+
+          {/* Automated checks */}
+          <div className="p-6 border-b border-slate-100">
+            <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">Automated pre-check results</div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {Object.entries(c.autoChecks).map(([k, v]) => (
+                <div key={k} className={`p-2 rounded-lg text-xs ${v === 'pass' ? 'bg-emerald-50 text-emerald-800' : v === 'warn' ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-800'}`}>
+                  <div className="font-medium capitalize">{k.replace(/([A-Z])/g, ' $1').trim()}</div>
+                  <div>{v === 'pass' ? '✓ pass' : v === 'warn' ? '⚠ warn' : '✕ fail'}</div>
+                </div>
+              ))}
+            </div>
+            {c.reviewerNote && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                <strong>Auto-flag note:</strong> {c.reviewerNote}
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          {c.type === 'scenario' && (
+            <div className="p-6 border-b border-slate-100 space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Situation</div>
+                <div className="law-text text-slate-700">{c.situation}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Choices</div>
+                <div className="space-y-2">
+                  {c.choices.map((ch, i) => (
+                    <div key={i} className={`p-3 rounded-lg border ${ch.correct ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                      <div className="text-sm text-slate-900">{ch.correct && '✓ '} {ch.text}</div>
+                      <div className="text-xs text-slate-600 mt-1">{ch.explanation}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {c.type === 'simplification' && (
+            <div className="p-6 border-b border-slate-100 space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Original statutory text</div>
+                <div className="law-text text-slate-700 p-3 bg-slate-50 rounded-lg">{c.original}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Proposed simplification</div>
+                <div className="law-text text-slate-900 p-3 bg-amber-50 rounded-lg border border-amber-200">{c.proposed}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Decision panel */}
+          <div className="p-6 bg-slate-50">
+            <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">Review decision</div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="success" onClick={() => decide(c.id, 'approved')}>✓ Approve</Button>
+              <Button variant="secondary" onClick={() => decide(c.id, 'approved_with_edits', 'Requires minor copy edits before publishing.')}>✎ Approve with edits</Button>
+              <Button variant="ghost" onClick={() => decide(c.id, 'escalated', 'Escalated to Tier 2.')}>↑ Escalate to Tier 2</Button>
+              <Button variant="danger" onClick={() => decide(c.id, 'rejected', 'See rejection codes.')}>✕ Reject</Button>
+            </div>
+            <div className="text-xs text-slate-500 mt-3">
+              Rejection codes available: R1 overstated right · R2 missing exception · R3 wrong actor · R4 citation mismatch · R5 misleading distractor · R6 language too complex
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6 fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="font-serif text-3xl text-slate-900">Legal Reviewer Console</h2>
+          <p className="text-sm text-slate-500">Tier 1 & Tier 2 moderation of community contributions and AI-drafted scenarios.</p>
+        </div>
+        <Pill tone="amber">Admin mode</Pill>
+      </div>
+
+      <div className="grid md:grid-cols-4 gap-3">
+        <StatCard label="In queue" value={pending.length} tone="amber" />
+        <StatCard label="Reviewed today" value={reviewed.length} tone="slate" />
+        <StatCard label="Scenarios live" value={SCENARIOS.length} tone="emerald" />
+        <StatCard label="Law sections" value={Object.keys(LAW_SECTIONS).length} tone="blue" />
+      </div>
+
+      <div className="flex border-b border-slate-200">
+        {['queue', 'reviewed', 'pipeline'].map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px ${tab === t ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >{t}</button>
+        ))}
+      </div>
+
+      {tab === 'queue' && (
+        <div className="space-y-2">
+          {pending.length === 0 && <Card className="p-8 text-center text-slate-500 text-sm">Queue is empty. Nothing waiting for review.</Card>}
+          {pending.map(c => (
+            <button
+              key={c.id}
+              onClick={() => setActiveContrib(c)}
+              className="w-full text-left p-4 bg-white rounded-xl card-shadow hover:-translate-y-0.5 transition"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Pill tone="amber">{c.type}</Pill>
+                <Pill tone="blue">{c.domain}</Pill>
+                {c.flaggedCodes.length > 0 && <Pill tone="rose">⚑ {c.flaggedCodes.join(', ')}</Pill>}
+                <Pill>Suggested: {c.suggestedReviewer}</Pill>
+              </div>
+              <div className="font-semibold text-slate-900">{c.title}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                <strong>{c.contributor}</strong> · rep {c.reputation} · {new Date(c.submittedAt).toLocaleString()}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'reviewed' && (
+        <div className="space-y-2">
+          {reviewed.length === 0 && <Card className="p-8 text-center text-slate-500 text-sm">No decisions recorded yet.</Card>}
+          {reviewed.map(c => {
+            const d = decisions[c.id];
+            return (
+              <Card key={c.id} className="p-4 flex items-center gap-3">
+                <div>
+                  <Pill tone={d.decision === 'approved' || d.decision === 'approved_with_edits' ? 'emerald' : d.decision === 'rejected' ? 'rose' : 'amber'}>
+                    {d.decision.replace('_', ' ')}
+                  </Pill>
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-slate-900 text-sm">{c.title}</div>
+                  <div className="text-xs text-slate-500">by {c.contributor} · decided {new Date(d.at).toLocaleString()}</div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === 'pipeline' && <PipelineView />}
+    </div>
+  );
+}
+
+function StatCard({ label, value, tone='slate' }) {
+  const tones = {
+    slate: 'bg-white',
+    amber: 'bg-amber-50',
+    emerald: 'bg-emerald-50',
+    blue: 'bg-blue-50',
+    rose: 'bg-rose-50',
+  };
+  return (
+    <div className={`p-5 rounded-2xl card-shadow ${tones[tone]}`}>
+      <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-3xl font-semibold text-slate-900 mt-1">{value}</div>
+    </div>
+  );
+}
+
+function PipelineView() {
+  const stages = [
+    { id: 1, name: 'Raw source ingested', status: 'done', info: 'India Code PDFs, PRS, cybercrime.gov.in advisories' },
+    { id: 2, name: 'Clean & normalize', status: 'done', info: 'Section numbering normalized, headers stripped' },
+    { id: 3, name: 'Entity extraction', status: 'done', info: 'LegalBERT-India pipeline; 1,284 actor/action pairs' },
+    { id: 4, name: 'AI scenario drafting', status: 'running', info: 'Batch 2026-04-19 · 23 of 50 drafts produced' },
+    { id: 5, name: 'Automated pre-checks', status: 'running', info: 'Schema, citation existence, contradiction, duplicate (0.85 threshold)' },
+    { id: 6, name: 'Tier 1 review', status: 'queued', info: `${INITIAL_PENDING.length} items in queue` },
+    { id: 7, name: 'Tier 2 review', status: 'queued', info: 'Advocate/law professor sign-off' },
+    { id: 8, name: 'Published to pool', status: 'live', info: `${SCENARIOS.length} scenarios currently served` },
+  ];
+  return (
+    <Card className="p-6">
+      <div className="text-xs uppercase tracking-wider text-slate-500 mb-4">Content pipeline status</div>
+      <div className="space-y-3">
+        {stages.map(s => (
+          <div key={s.id} className="flex items-center gap-3 text-sm">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-none font-semibold text-xs ${
+              s.status === 'done' ? 'bg-emerald-500 text-white' :
+              s.status === 'running' ? 'bg-amber-500 text-white pulse-dot' :
+              s.status === 'live' ? 'bg-blue-500 text-white' :
+              'bg-slate-200 text-slate-500'
+            }`}>
+              {s.status === 'done' ? '✓' : s.status === 'live' ? '●' : s.id}
+            </div>
+            <div className="flex-1">
+              <div className="font-medium text-slate-900">{s.name}</div>
+              <div className="text-xs text-slate-500">{s.info}</div>
+            </div>
+            <Pill tone={
+              s.status === 'done' ? 'emerald' :
+              s.status === 'running' ? 'amber' :
+              s.status === 'live' ? 'blue' :
+              'slate'
+            }>{s.status}</Pill>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ============================================================
+   ROOT APP
+   ============================================================ */
+
+function App() {
+  const [state, setState] = useState(loadState);
+  const [view, setView] = useState('home');
+  const [adminMode, setAdminMode] = useState(false);
+
+  useEffect(() => { saveState(state); }, [state]);
+
+  return (
+    <div className="min-h-screen bg-stone-50 text-slate-900">
+      <TopNav view={view} setView={setView} streak={state.streak} adminMode={adminMode} setAdminMode={setAdminMode} />
+      <main>
+        {view === 'home' && <HomeView state={state} setState={setState} setView={setView} />}
+        {view === 'learn' && <DailyLearnView state={state} setState={setState} setView={setView} />}
+        {view === 'situation' && <SituationView setView={setView} />}
+        {view === 'progress' && <ProgressView state={state} />}
+        {view === 'admin' && <AdminView state={state} setState={setState} />}
+      </main>
+      <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-8 mt-12 text-xs text-slate-400 text-center">
+        Adhikar · Legal literacy for India · This platform provides educational content only and is not a substitute for legal advice.
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
